@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# ==========================================================
+# SCRIPT SETUP WIFI ACCESS POINT - ORANGE PI 5 (EV-OPI)
+# Target Perangkat: ESP32 / ESP32S3
+# ==========================================================
+
+echo "Menghapus koneksi lama jika ada..."
+sudo nmcli connection delete ev-hotspot 2>/dev/null
+
+echo "1. Membuat koneksi baru..."
+sudo nmcli connection add \
+    type wifi \
+    ifname wlan0 \
+    con-name ev-hotspot \
+    autoconnect yes \
+    ssid EV-OPI
+
+echo "2. Mengatur mode Access Point (2.4GHz)..."
+sudo nmcli connection modify ev-hotspot \
+    802-11-wireless.mode ap \
+    802-11-wireless.band bg \
+    802-11-wireless.channel 6
+
+echo "3. Mengatur keamanan (WPA2-PSK)..."
+sudo nmcli connection modify ev-hotspot \
+    wifi-sec.key-mgmt wpa-psk \
+    wifi-sec.psk ev12345678
+
+echo "4. Konfigurasi Protokol Keamanan Spesifik (PENTING UNTUK ESP32)..."
+sudo nmcli connection modify ev-hotspot \
+    802-11-wireless-security.proto rsn \
+    802-11-wireless-security.group ccmp \
+    802-11-wireless-security.pairwise ccmp \
+    802-11-wireless-security.pmf disable
+
+echo "5. Mengatur IP Sharing (DHCP Server)..."
+sudo nmcli connection modify ev-hotspot \
+    ipv4.method shared \
+    ipv6.method ignore
+
+echo "6. Mengaktifkan Hotspot..."
+sudo nmcli connection up ev-hotspot
+
+echo "=========================================================="
+echo " SETUP SELESAI! "
+echo " SSID: EV-OPI "
+echo " Pass: ev12345678 "
+echo " IP Orange Pi: 10.42.0.1 (Default) "
+echo "=========================================================="
