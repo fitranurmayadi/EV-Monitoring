@@ -1,34 +1,29 @@
-Menginstal ThingsBoard (Community Edition) dan PostgreSQL di Orange Pi 5 Pro menggunakan Docker adalah pilihan yang sangat efisien karena performa Rockchip RK3588S pada board ini sangat mumpuni.
+Untuk Orange Pi 5 Pro, versi terbaik adalah menggunakan Single Container (Monolith). Mengapa? Karena ThingsBoard membutuhkan RAM yang cukup besar (Java-based), dan menyatukan PostgreSQL di dalam satu container lebih efisien dalam penggunaan resource pada arsitektur ARM, namun tetap aman karena data disimpan di luar container (bind mount).
 
-Berikut adalah panduan langkah demi langkah untuk instalasi terbaru (v4.2.x per 2026) menggunakan Docker Compose.
-Prasyarat
+Berikut adalah panduan lengkap dan konsisten:
+Langkah 1: Persiapan Folder Data
 
-    Sistem Operasi: Ubuntu/Debian (Armbian atau OS resmi Orange Pi).
-
-    Hardware: Minimal RAM 4GB (Orange Pi 5 Pro biasanya memiliki 4GB/8GB/16GB, ini sudah sangat cukup).
-
-    Docker & Docker Compose: Pastikan sudah terinstal.
-
-Langkah 1: Persiapan Folder dan Izin
-
-Buat direktori kerja untuk menyimpan data ThingsBoard agar tidak hilang saat container dihapus.
+Kita akan membuat folder khusus di direktori home user Orange Pi untuk memastikan database PostgreSQL dan Log MQTT tersimpan secara permanen.
 Bash
 
+# Buat direktori utama dan sub-direktori data serta logs
 mkdir -p ~/thingsboard-docker/data && mkdir -p ~/thingsboard-docker/logs
+
+# Berikan izin akses ke user ID 799 (user default di dalam container ThingsBoard)
 sudo chown -R 799:799 ~/thingsboard-docker/data
 sudo chown -R 799:799 ~/thingsboard-docker/logs
-cd ~/thingsboard-docker
 
-    Catatan: User ID 799 adalah user default yang digunakan di dalam container ThingsBoard.
+# Masuk ke direktori tersebut
+cd ~/thingsboard-docker
 
 Langkah 2: Membuat File Docker Compose
 
-Buat file docker-compose.yml yang menggabungkan ThingsBoard dengan database PostgreSQL terbaru.
+Buat file konfigurasi menggunakan editor nano.
 Bash
 
 nano docker-compose.yml
 
-Salin dan tempel konfigurasi berikut:
+Salin dan tempel kode berikut. Konfigurasi ini sudah dioptimalkan untuk PostgreSQL terbaru (internal) dan Logging MQTT:
 YAML
 
 version: '3.8'
@@ -36,43 +31,68 @@ services:
   mytb:
     restart: always
     image: "thingsboard/tb-postgres:latest"
+    container_name: thingsboard
     ports:
-      - "8080:9090"
-      - "1883:1883"
-      - "7070:7070"
-      - "5683-5688:5683-5688/udp"
+      - "8080:9090"       # Dashboard Web
+      - "1883:1883"       # MQTT Port (Penerimaan Data Sensor)
+      - "7070:7070"       # Edge Service
+      - "5683-5688:5683-5688/udp" # CoAP Port
     environment:
       TB_QUEUE_TYPE: in-memory
+      # Memastikan logs mencatat aktivitas MQTT secara detail
+      TB_LOG_LEVEL: info 
     volumes:
       - ./data:/data
       - ./logs:/var/log/thingsboard
 
-Langkah 3: Menjalankan Instalasi
+Tekan CTRL+O, Enter, lalu CTRL+X untuk menyimpan.
+Langkah 3: Menjalankan ThingsBoard
 
-Karena ini adalah instalasi pertama, ThingsBoard perlu membuat skema database di PostgreSQL. Jalankan perintah berikut:
+Karena ini instalasi pertama, ThingsBoard akan melakukan inisialisasi database PostgreSQL di dalam folder ./data Anda.
 Bash
 
 docker compose up -d
 
-Anda bisa memantau proses startup dengan melihat log (proses ini memakan waktu 2-5 menit pada Orange Pi 5 Pro):
+Penting: Proses inisialisasi pada Orange Pi 5 Pro memakan waktu sekitar 2-4 menit. Jangan terburu-buru membuka browser. Anda bisa memantau prosesnya dengan perintah:
 Bash
 
 docker compose logs -f mytb
 
-Langkah 4: Mengakses Dashboard
+Tunggu sampai muncul tulisan: Started ThingsBoard Server.
+Langkah 4: Verifikasi & Akses
 
-Setelah log menunjukkan pesan Started ThingsBoard Server, buka browser di laptop/PC Anda dan akses:
+Setelah sistem berjalan, buka browser di perangkat lain yang berada dalam jaringan yang sama:
 
     URL: http://[IP-ORANGE-PI]:8080
 
-    Akun Default (System Administrator):
+    Login Tenant (Untuk buat Device/Dashboard):
 
-        Login: sysadmin@thingsboard.org
-
-        Password: sysadmin
-
-    Akun Default (Tenant Administrator):
-
-        Login: tenant@thingsboard.org
+        User: tenant@thingsboard.org
 
         Password: tenant
+
+Langkah 5: Cara Mengetes Log Data MQTT
+
+Untuk memastikan database mencatat data yang diterima, coba kirim data simulasi dari terminal Orange Pi Anda:
+
+    Buka tab terminal baru.
+
+    Instal tool MQTT (jika belum ada): sudo apt install mosquitto-clients
+
+    Kirim data (Ganti ACCESS_TOKEN dengan token yang Anda dapat dari web dashboard):
+
+Bash
+
+mosquitto_pub -h localhost -t v1/devices/me/telemetry -u "ACCESS_TOKEN" -m '{"temp": 27.5, "hum": 60}'
+
+Ringkasan Folder Konsisten
+
+Setelah instalasi selesai, struktur folder Anda akan terlihat seperti ini:
+
+    ~/thingsboard-docker/data: Berisi database PostgreSQL (Tabel sensor, log, user).
+
+    ~/thingsboard-docker/logs: Berisi file thingsboard.log (Catatan aktivitas sistem).
+
+    ~/thingsboard-docker/docker-compose.yml: File konfigurasi utama.
+
+Tips Pro: Jika Anda menggunakan Orange Pi 5 Pro dengan NVMe SSD, letakkan folder thingsboard-docker ini di dalam mount point SSD Anda untuk performa database 10x lebih cepat dibanding MicroSD.
