@@ -1,0 +1,109 @@
+Panduan Master yang mencakup seluruh alur kerja Anda, mulai dari meja PC (persiapan SD Card) hingga konfigurasi terminal di Orange Pi 5 Pro.
+Tahap 1: Persiapan di PC (Raspberry Pi Imager)
+
+    Buka Raspberry Pi Imager.
+
+    OS: Pilih file .img Orange Pi yang sudah Anda unduh.
+
+    Storage: Pilih SD Card (128GB).
+
+    Write: Tunggu hingga selesai dan lakukan verifikasi.
+
+    Masukkan SD Card ke Orange Pi, pasang NVMe, lalu nyalakan (booting pertama kali).
+
+Tahap 2: Migrasi Sistem ke NVMe
+
+Setelah masuk ke terminal Orange Pi (SSH atau Lokal), gunakan alat bantu bawaan untuk memindahkan OS ke NVMe.
+Bash
+
+# Buka tool konfigurasi Orange Pi
+sudo orangepi-config
+
+    Pilih System.
+
+    Pilih Install to Disk.
+
+    Pilih Install/Update bootloader on SD/eMMC, root on NVMe.
+
+    Pilih partisi NVMe Anda (biasanya /dev/nvme0n1p1).
+
+    Tunggu hingga proses salin selesai, lalu pilih Reboot.
+
+Tahap 3: Pengecekan Pasca Migrasi
+
+Setelah reboot, kita harus memastikan sistem sudah berjalan di NVMe namun /boot mungkin masih menempel di SD Card.
+Bash
+
+# 1. Cek di mana Root (/) dan Boot berada
+findmnt /
+findmnt /boot
+
+# 2. Ambil UUID NVMe untuk langkah berikutnya
+blkid /dev/nvme0n1p1
+# Catat UUID-nya, misal: 1e54aeff-934e-4aef-917c-7a7761b0386d
+
+Tahap 4: Sinkronisasi /boot ke Fisik NVMe
+
+Langkah ini memastikan folder /boot di dalam NVMe terisi file kernel asli, sehingga kita tidak butuh partisi boot SD Card lagi.
+Bash
+
+sudo su
+
+# 1. Mount partisi boot SD Card ke folder sementara
+mount /dev/mmcblk1p1 /mnt
+
+# 2. Pastikan folder /boot di NVMe bersih sebelum diisi
+rm -rf /boot/*
+
+# 3. Salin isi kernel dari SD Card ke folder /boot di NVMe
+cp -rp /mnt/* /boot/
+
+# 4. Verifikasi isi folder
+ls -lh /boot
+# Harus muncul file: Image, uInitrd, orangepiEnv.txt
+
+Tahap 5: Konfigurasi File Sistem (fstab & Env)
+
+Mematikan ketergantungan pada SD Card 128GB.
+Bash
+
+# 1. Edit fstab
+nano /etc/fstab
+# BERI TANDA '#' pada baris yang memuat /boot dan mmcblk1p1
+# Contoh: # /dev/mmcblk1p1  /boot  vfat  defaults  0  2
+
+# 2. Edit konfigurasi boot di NVMe
+nano /boot/orangepiEnv.txt
+# Pastikan baris rootdev sudah benar:
+# rootdev=UUID=1e54aeff-934e-4aef-917c-7a7761b0386d
+
+Tahap 6: Menyiapkan SD Card Starter (4GB)
+
+Sekarang masukkan SD Card 4GB ke USB Card Reader dan colok ke Orange Pi. Kita asumsikan terbaca sebagai /dev/sda.
+Bash
+
+# 1. Tulis bootloader ke kartu 4GB
+dd if=/usr/lib/linux-u-boot-current-orangepi5pro_1.0.6_arm64/rkspi_loader.img of=/dev/sda status=progress
+sync
+
+# 2. Verifikasi MD5 untuk memastikan kartu 4GB identik dengan file asli
+md5sum /usr/lib/linux-u-boot-current-orangepi5pro_1.0.6_arm64/rkspi_loader.img
+dd if=/dev/sda bs=1M count=4 | md5sum
+
+Tahap 7: Pengujian Final
+
+    Matikan perangkat: sudo poweroff.
+
+    Cabut SD Card 128GB (Lama).
+
+    Pasang SD Card 4GB ke slot MicroSD internal.
+
+    Nyalakan Orange Pi.
+
+Verifikasi Akhir setelah menyala:
+Bash
+
+# Pastikan semua mountpoint ada di NVMe
+lsblk
+
+Hasil yang benar akan menunjukkan nvme0n1p1 ter-mount sebagai / sekaligus /boot.
