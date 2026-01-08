@@ -1,0 +1,78 @@
+Menginstal ThingsBoard (Community Edition) dan PostgreSQL di Orange Pi 5 Pro menggunakan Docker adalah pilihan yang sangat efisien karena performa Rockchip RK3588S pada board ini sangat mumpuni.
+
+Berikut adalah panduan langkah demi langkah untuk instalasi terbaru (v4.2.x per 2026) menggunakan Docker Compose.
+Prasyarat
+
+    Sistem Operasi: Ubuntu/Debian (Armbian atau OS resmi Orange Pi).
+
+    Hardware: Minimal RAM 4GB (Orange Pi 5 Pro biasanya memiliki 4GB/8GB/16GB, ini sudah sangat cukup).
+
+    Docker & Docker Compose: Pastikan sudah terinstal.
+
+Langkah 1: Persiapan Folder dan Izin
+
+Buat direktori kerja untuk menyimpan data ThingsBoard agar tidak hilang saat container dihapus.
+Bash
+
+mkdir -p ~/thingsboard-docker/data && mkdir -p ~/thingsboard-docker/logs
+sudo chown -R 799:799 ~/thingsboard-docker/data
+sudo chown -R 799:799 ~/thingsboard-docker/logs
+cd ~/thingsboard-docker
+
+    Catatan: User ID 799 adalah user default yang digunakan di dalam container ThingsBoard.
+
+Langkah 2: Membuat File Docker Compose
+
+Buat file docker-compose.yml yang menggabungkan ThingsBoard dengan database PostgreSQL terbaru.
+Bash
+
+nano docker-compose.yml
+
+Salin dan tempel konfigurasi berikut:
+YAML
+
+version: '3.8'
+services:
+  mytb:
+    restart: always
+    image: "thingsboard/tb-postgres:latest"
+    ports:
+      - "8080:9090"
+      - "1883:1883"
+      - "7070:7070"
+      - "5683-5688:5683-5688/udp"
+    environment:
+      TB_QUEUE_TYPE: in-memory
+    volumes:
+      - ./data:/data
+      - ./logs:/var/log/thingsboard
+
+Langkah 3: Menjalankan Instalasi
+
+Karena ini adalah instalasi pertama, ThingsBoard perlu membuat skema database di PostgreSQL. Jalankan perintah berikut:
+Bash
+
+docker compose up -d
+
+Anda bisa memantau proses startup dengan melihat log (proses ini memakan waktu 2-5 menit pada Orange Pi 5 Pro):
+Bash
+
+docker compose logs -f mytb
+
+Langkah 4: Mengakses Dashboard
+
+Setelah log menunjukkan pesan Started ThingsBoard Server, buka browser di laptop/PC Anda dan akses:
+
+    URL: http://[IP-ORANGE-PI]:8080
+
+    Akun Default (System Administrator):
+
+        Login: sysadmin@thingsboard.org
+
+        Password: sysadmin
+
+    Akun Default (Tenant Administrator):
+
+        Login: tenant@thingsboard.org
+
+        Password: tenant
